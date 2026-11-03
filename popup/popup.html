@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="dot" aria-hidden="true"></div>
+    <h1>Dark Glass for Gmail</h1>
+    <span id="state" class="state"></span>
+  </header>
+
+  <p id="health" class="hint warn" hidden></p>
+
+  <section>
+    <label class="row-label" id="mode-label">Dark mode</label>
+    <div class="seg" role="radiogroup" aria-labelledby="mode-label">
+      <button data-set="mode" data-value="auto" role="radio">Follow system</button>
+      <button data-set="mode" data-value="on" role="radio">Always</button>
+      <button data-set="mode" data-value="off" role="radio">Off</button>
+    </div>
+  </section>
+
+  <section>
+    <label class="row-label" for="glass">Glass tint (minimum) <output id="glass-out"></output></label>
+    <input id="glass" type="range" min="0.3" max="0.9" step="0.02" />
+    <label class="row-label" for="wallDim">Wallpaper brightness <output id="wallDim-out"></output></label>
+    <input id="wallDim" type="range" min="0.25" max="1" step="0.01" />
+  </section>
+
+  <section>
+    <label class="row-label" id="email-label">Designed emails</label>
+    <div class="seg" role="radiogroup" aria-labelledby="email-label">
+      <button data-set="email" data-value="smart" role="radio" title="Recolor to dark; keep brand colors and images">Dark</button>
+      <button data-set="email" data-value="light" role="radio" title="Original look on a soft light card">Light card</button>
+      <button data-set="email" data-value="invert" role="radio" title="Color-invert (rougher, works on anything)">Invert</button>
+    </div>
+  </section>
+
+  <footer><button id="more" class="link">Wallpaper, accent color and more…</button></footer>
+  <script src="../src/defaults.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

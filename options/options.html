@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dark Glass for Gmail settings</title>
+  <link rel="stylesheet" href="../popup/popup.css" />
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body class="options">
+  <main>
+    <header>
+      <div class="dot" aria-hidden="true"></div>
+      <h1>Dark Glass for Gmail</h1>
+      <span id="state" class="state"></span>
+    </header>
+
+    <p id="health" class="notice" hidden></p>
+
+    <section aria-labelledby="h-mode">
+      <h2 id="h-mode">Mode</h2>
+      <div class="seg" role="radiogroup" aria-labelledby="h-mode">
+        <button data-set="mode" data-value="auto" role="radio">Follow system</button>
+        <button data-set="mode" data-value="on" role="radio">Always dark</button>
+        <button data-set="mode" data-value="off" role="radio">Off</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-wall">
+      <h2 id="h-wall">Wallpaper</h2>
+      <div class="walls" role="radiogroup" aria-labelledby="h-wall" id="walls"></div>
+      <div class="custom-row">
+        <label class="file-btn">
+          <input id="wall-file" type="file" accept="image/*" />
+          <span>Choose your own image…</span>
+        </label>
+        <button id="wall-remove" class="link" hidden>Remove your image</button>
+      </div>
+      <label class="row-label" for="wallDim">Wallpaper brightness <output id="wallDim-out"></output></label>
+      <input id="wallDim" data-range type="range" min="0.25" max="1" step="0.01" />
+      <label class="toggle"><input type="checkbox" data-toggle="tint" /> Tint the glass with the wallpaper's color</label>
+      <label class="toggle"><input type="checkbox" data-toggle="focusRead" /> Dim and blur the wallpaper while reading</label>
+    </section>
+
+    <section aria-labelledby="h-glass">
+      <h2 id="h-glass">Glass</h2>
+      <label class="row-label" for="glass">Tint (minimum) <output id="glass-out"></output></label>
+      <input id="glass" data-range type="range" min="0.3" max="0.9" step="0.02" />
+      <label class="row-label" for="blur">Blur <output id="blur-out"></output></label>
+      <input id="blur" data-range type="range" min="0" max="48" step="1" />
+      <p class="hint">The glass thickens on its own over bright wallpapers so text stays readable. Your Mac's Increase contrast, Reduce transparency and Reduce motion settings are followed.</p>
+    </section>
+
+    <section aria-labelledby="h-accent">
+      <h2 id="h-accent">Accent color</h2>
+      <div class="swatches" role="radiogroup" aria-labelledby="h-accent" id="swatches"></div>
+      <label class="toggle"><input type="checkbox" data-toggle="motion" /> Animations (menus, mode switch)</label>
+    </section>
+
+    <section aria-labelledby="h-email">
+      <h2 id="h-email">Designed emails</h2>
+      <div class="seg" role="radiogroup" aria-labelledby="h-email">
+        <button data-set="email" data-value="smart" role="radio" title="Recolor to dark; keep brand colors and images">Dark</button>
+        <button data-set="email" data-value="light" role="radio" title="Original look on a soft light card">Light card</button>
+        <button data-set="email" data-value="invert" role="radio" title="Color-invert (rougher, works on anything)">Invert</button>
+      </div>
+      <label class="row-label" for="paper">Light card brightness <output id="paper-out"></output></label>
+      <input id="paper" data-range type="range" min="0.7" max="1" step="0.01" />
+      <label class="row-label" for="warmth">Light card warmth <output id="warmth-out"></output></label>
+      <input id="warmth" data-range type="range" min="0" max="0.3" step="0.01" />
+      <p class="hint">Hover any email to switch it between dark and original, or to remember that choice for the sender.</p>
+    </section>
+
+    <section aria-labelledby="h-senders">
+      <h2 id="h-senders">Remembered senders</h2>
+      <ul id="senders" class="senders"></ul>
+      <p id="senders-empty" class="hint">None yet.</p>
+    </section>
+
+    <footer><button id="reset" class="link">Reset all settings</button></footer>
+  </main>
+  <script src="../src/defaults.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

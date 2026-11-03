@@ -1,0 +1,521 @@
+/*
+ * Dark Glass for Gmail: the glass layer.
+ *
+ * Only ARIA roles, standard attributes, Gmail's long-standing gh="cm" and
+ * #loading hooks, and our own data-gg-* tags (set by content.js) are used
+ * here. The one compiled class name is .a3s (message body), used only to
+ * hold a body back for a frame before content.js tags it.
+ * Everything is gated on :root[data-gg="on"] so nothing applies in light mode.
+ * The :root[data-gg] prefix also outranks the rewritten Gmail rules.
+ */
+
+/* Avoid a white flash while Gmail boots. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-gg="off"]) { background: #0b0d12; }
+}
+
+:root[data-gg="on"] {
+  color-scheme: dark;
+  --gg-text: #e8eaed;
+  --gg-text-2: #c4c7cc;
+  --gg-accent: #0a84ff;
+  --gg-accent-rgb: 10, 132, 255;
+  --gg-link: #8ec3ff;
+  --gg-link-rgb: 142, 195, 255;
+  --gg-edge: rgba(255, 255, 255, 0.09);
+  --gg-edge-hi: rgba(255, 255, 255, 0.14);
+  --gg-glass-rgb: 16, 18, 25;
+  --gg-float-rgb: 28, 30, 38;
+  --gg-glass: rgba(var(--gg-glass-rgb), var(--gg-panel-alpha, 0.8));
+  --gg-float: rgba(var(--gg-float-rgb), min(0.92, calc(var(--gg-panel-alpha, 0.8) + 0.2)));
+  --gg-sticky: rgba(var(--gg-glass-rgb), 0.8);
+  --gg-sticky-filter: blur(var(--gg-blur, 24px)) saturate(160%);
+  --gg-wallpaper:
+    radial-gradient(1200px 800px at 12% 8%, rgba(88, 101, 242, 0.32), transparent 60%),
+    radial-gradient(1000px 700px at 88% 92%, rgba(20, 184, 166, 0.22), transparent 60%),
+    radial-gradient(900px 600px at 72% 18%, rgba(168, 85, 247, 0.2), transparent 60%),
+    #0b0d12;
+  --gg-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  accent-color: var(--gg-accent);
+}
+
+::selection { background: rgba(var(--gg-accent-rgb, 10, 132, 255), 0.35); }
+
+/* ---------- wallpaper ---------- */
+
+:root[data-gg="on"] body {
+  background: #0b0d12 !important;
+  color: var(--gg-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Our wallpaper layer: built-in gradients, the user's own image, or the
+   fallback when Gmail has no theme. Gmail's theme image sits above it. */
+:root[data-gg="on"] body::before {
+  content: "";
+  position: fixed;
+  inset: -24px;
+  z-index: -1;
+  background: var(--gg-wallpaper);
+  filter: brightness(var(--gg-wall-dim, 0.62));
+  pointer-events: none;
+}
+:root[data-gg="on"][data-gg-wall="theme"] body::before { display: none; }
+
+/* A chosen wallpaper replaces Gmail's theme image. */
+:root[data-gg="on"][data-gg-wall="ours"] [data-gg-wallpaper] { visibility: hidden !important; }
+:root[data-gg="on"][data-gg-wall="ours"] [data-gg-wallroot] { background: transparent !important; }
+
+/* Keep the user's Gmail theme image, just dim it so glass on top stays legible. */
+:root[data-gg="on"] [data-gg-wallpaper] {
+  filter: brightness(var(--gg-wall-dim, 0.62)) saturate(1.1) !important;
+}
+
+/* Focus look: while a thread is open, the wallpaper steps back.
+   (Pseudo-elements can't go inside :is(), hence the separate rules.) */
+:root[data-gg="on"][data-gg-focus-read][data-gg-reading] [data-gg-wallpaper] {
+  filter: brightness(calc(var(--gg-wall-dim, 0.62) * 0.7)) saturate(1.05) blur(10px) !important;
+  transform: scale(1.04);
+}
+:root[data-gg="on"][data-gg-focus-read][data-gg-reading] body::before {
+  filter: brightness(calc(var(--gg-wall-dim, 0.62) * 0.7)) blur(10px);
+}
+:root[data-gg="on"][data-gg-motion] [data-gg-wallpaper] {
+  transition: filter 0.5s var(--gg-ease), transform 0.5s var(--gg-ease);
+}
+:root[data-gg="on"][data-gg-motion] body::before {
+  transition: filter 0.5s var(--gg-ease);
+}
+
+/* Gmail's loading screen. */
+:root[data-gg="on"] #loading {
+  background: transparent !important;
+  color: var(--gg-text-2) !important;
+}
+:root[data-gg="on"] #loading * { color: inherit !important; }
+
+/* ---------- main panel ---------- */
+
+:root[data-gg="on"] [data-gg-panel] {
+  position: relative;
+  isolation: isolate;
+  background: transparent !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+}
+/* The glass lives on a pseudo element: backdrop-filter on the panel itself
+   would break Gmail's position:fixed children. */
+:root[data-gg="on"] [data-gg-panel]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 120px),
+    var(--gg-glass);
+  -webkit-backdrop-filter: blur(var(--gg-blur, 24px)) saturate(160%);
+  backdrop-filter: blur(var(--gg-blur, 24px)) saturate(160%);
+  pointer-events: none;
+}
+/* Light catching the edge: bright along the top, fading down the sides. */
+:root[data-gg="on"] [data-gg-panel]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.24),
+    rgba(255, 255, 255, 0.07) 30%,
+    rgba(255, 255, 255, 0.04) 70%,
+    rgba(255, 255, 255, 0.08)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+/* ---------- message list rows ---------- */
+
+:root[data-gg="on"][data-gg-motion] [role="main"] [role="row"] {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+:root[data-gg="on"] [role="main"] [role="row"]:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+/* Unread: brighter row and an accent bar. */
+:root[data-gg="on"] [role="main"] [role="row"][data-gg-unread] {
+  background-color: rgba(255, 255, 255, 0.045) !important;
+  box-shadow: inset 3px 0 0 var(--gg-accent) !important;
+}
+:root[data-gg="on"] [role="main"] [role="row"][data-gg-unread]:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+/* Selected (checked) rows: accent tint, like a macOS sidebar selection. */
+:root[data-gg="on"] [role="main"] [role="row"]:has([role="checkbox"][aria-checked="true"]) {
+  background-color: rgba(var(--gg-accent-rgb), 0.2) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--gg-accent-rgb), 0.45) !important;
+}
+
+/* Important markers in the accent color. content.js tags the icon of every
+   switch marked important and hands over its image as a stencil. */
+:root[data-gg="on"] [data-gg-imp] {
+  background-image: none !important;
+  background-color: var(--gg-accent) !important;
+  -webkit-mask: var(--gg-imp-url) var(--gg-imp-pos, 0 0) / var(--gg-imp-size, contain) no-repeat;
+  mask: var(--gg-imp-url) var(--gg-imp-pos, 0 0) / var(--gg-imp-size, contain) no-repeat;
+  filter: none !important;
+}
+
+/* ---------- threads: each message is a card ---------- */
+
+:root[data-gg="on"] [role="main"] [role="list"] > [role="listitem"][aria-expanded] {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px var(--gg-edge) !important;
+  margin: 6px 8px;
+}
+:root[data-gg="on"] [role="main"] [role="list"] > [role="listitem"][aria-expanded="false"] {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  margin: 3px 8px;
+}
+:root[data-gg="on"] [role="main"] [role="list"] > [role="listitem"][aria-expanded="false"]:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* ---------- header, search, nav ---------- */
+
+/* Compose button. gh="cm" is Gmail's long-standing hook for it. */
+:root[data-gg="on"] [gh="cm"] {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px var(--gg-edge), 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+  color: var(--gg-text) !important;
+}
+:root[data-gg="on"] [gh="cm"]:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+:root[data-gg="on"] [role="search"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px var(--gg-edge) !important;
+}
+:root[data-gg="on"] [role="search"]:focus-within {
+  background: var(--gg-float) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--gg-accent-rgb), 0.55), 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* The nav and header have no backing of their own (like light mode): their
+   text sits on the wallpaper. To keep it readable, the wallpaper gets a soft
+   vignette, darkest behind the nav and header and fading out under the
+   panel, so there are no bands or edges. Its strength (--gg-scrim-*) comes
+   from how bright the wallpaper is there; --gg-nav-w / --gg-top-h track the
+   nav's width and header's height. */
+:root[data-gg="on"] {
+  --gg-shade:
+    linear-gradient(
+      90deg,
+      rgba(10, 11, 16, var(--gg-scrim-nav, 0.6)) 0,
+      rgba(10, 11, 16, var(--gg-scrim-nav, 0.6)) var(--gg-nav-w, 256px),
+      rgba(10, 11, 16, 0) calc(var(--gg-nav-w, 256px) + 240px)
+    ),
+    linear-gradient(
+      180deg,
+      rgba(10, 11, 16, var(--gg-scrim-top, 0.6)) 0,
+      rgba(10, 11, 16, var(--gg-scrim-top, 0.6)) var(--gg-top-h, 64px),
+      rgba(10, 11, 16, 0) calc(var(--gg-top-h, 64px) + 180px)
+    );
+}
+:root[data-gg="on"] [data-gg-wallroot]::after,
+:root[data-gg="on"][data-gg-wall="ours"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--gg-shade);
+  pointer-events: none;
+}
+:root[data-gg="on"][data-gg-wall="ours"] body::after { z-index: -1; }
+:root[data-gg="on"][data-gg-wall="ours"] [data-gg-wallroot]::after { display: none; }
+:root[data-gg="on"] :is([role="navigation"], [role="banner"]) {
+  background-color: transparent !important;
+  background-image: none !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+/* Collapsed nav sliding out over the panel on hover: a glass sheet. */
+:root[data-gg="on"][data-gg-nav-float] [role="navigation"] {
+  background-color: var(--gg-float) !important;
+  -webkit-backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  border-radius: 0 16px 16px 0;
+  box-shadow: inset -1px 0 0 var(--gg-edge), inset 0 1px 0 rgba(255, 255, 255, 0.08), 12px 0 40px rgba(0, 0, 0, 0.45) !important;
+  text-shadow: none;
+}
+:root[data-gg="on"][data-gg-solid][data-gg-nav-float] [role="navigation"] {
+  background-color: rgb(32, 34, 42) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-gg="on"] ::placeholder {
+  color: rgba(232, 234, 237, 0.72) !important;
+}
+
+/* ---------- floating surfaces: menus, popups, dialogs ---------- */
+
+/* Only the outermost floating surface gets glass, so nested ones don't stack. */
+:root[data-gg="on"] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  background-color: var(--gg-float) !important;
+  -webkit-backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px var(--gg-edge),
+    0 18px 50px rgba(0, 0, 0, 0.5) !important;
+  color: var(--gg-text);
+}
+
+:root[data-gg="on"] [role="tooltip"] {
+  background-color: rgba(40, 42, 50, 0.95) !important;
+  color: var(--gg-text) !important;
+}
+
+/* Popovers fade and settle in, like macOS. Uses the individual `translate`
+   and `scale` properties so Gmail's own transforms are untouched. */
+@keyframes gg-pop {
+  from { opacity: 0; translate: 0 -4px; scale: 0.98; }
+}
+:root[data-gg="on"][data-gg-motion] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  animation: gg-pop 0.16s var(--gg-ease);
+}
+
+/* Contact cards: an embedded Google Contacts page. Its own colors are
+   rewritten inside the frame (frame.css); the glass goes on the box that
+   holds the frame, here in Gmail's page, where blur can see what's behind. */
+:root[data-gg="on"] :has(> iframe[src*="contacts.google.com/widget/hovercard"]) {
+  background-color: var(--gg-float) !important;
+  -webkit-backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  border-radius: 14px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px var(--gg-edge), 0 18px 50px rgba(0, 0, 0, 0.5) !important;
+}
+:root[data-gg="on"][data-gg-solid] :has(> iframe[src*="contacts.google.com/widget/hovercard"]) {
+  background-color: rgb(32, 34, 42) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-gg="on"][data-gg-motion] :has(> iframe[src*="contacts.google.com/widget/hovercard"]) {
+  animation: gg-pop 0.16s var(--gg-ease);
+}
+
+/* Editors (compose, inline reply). */
+:root[data-gg="on"] [contenteditable="true"][role="textbox"] {
+  color: var(--gg-text) !important;
+  caret-color: var(--gg-link);
+}
+
+/* ---------- email bodies ---------- */
+
+/* Hold a body back until it's been recolored (about a frame), so it never
+   flashes its light colors. The animation ends on its own after 0.6s as a
+   safety net. */
+@keyframes gg-hold { from { visibility: hidden; } }
+:root[data-gg="on"] [data-message-id] .a3s:not([data-gg-body]) {
+  animation: gg-hold 0.6s step-end;
+}
+
+/* Plain emails: dark-mode text. */
+:root[data-gg="on"] [data-gg-body="plain"] {
+  color: var(--gg-text) !important;
+}
+:root[data-gg="on"] :is([data-gg-body="plain"], [data-gg-body="dark"]) a:not([style*="color"]) {
+  color: var(--gg-link) !important;
+}
+:root[data-gg="on"] [data-gg-body="plain"] :is(blockquote, hr) {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Designed emails recolored to dark (content.js rewrites their colors). */
+:root[data-gg="on"] [data-gg-body="dark"] {
+  color: var(--gg-text) !important;
+}
+/* Light backing behind images until we know they're safe on dark. */
+:root[data-gg="on"] [data-gg-body="dark"] img[data-gg-plate=""] {
+  background-color: rgba(244, 245, 247, 0.94) !important;
+  border-radius: 3px;
+}
+/* Dark ink on transparency (most logos): flip it to light. */
+:root[data-gg="on"] [data-gg-body="dark"] img[data-gg-plate="invert"] {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92);
+}
+
+/* Designed emails on a light card, the way the sender built them.
+   Optionally dimmed and warmed for night reading. */
+:root[data-gg="on"] [data-gg-body="rich"] {
+  color-scheme: light;
+  background: #fff !important;
+  color: #202124 !important;
+  border-radius: 12px;
+  padding: 16px 20px !important;
+  filter: brightness(var(--gg-paper, 0.94)) sepia(var(--gg-warmth, 0));
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+:root[data-gg="on"] [data-gg-body="rich"] a:not([style*="color"]) {
+  color: #0b57d0 !important;
+}
+
+/* Optional: invert designed emails into dark, re-inverting media. */
+:root[data-gg="on"] [data-gg-body="invert"] {
+  color-scheme: light;
+  background: rgb(226, 227, 231) !important;
+  color: #202124 !important;
+  border-radius: 12px;
+  padding: 16px 20px !important;
+  filter: invert(1) hue-rotate(180deg);
+}
+:root[data-gg="on"] [data-gg-body="invert"] :is(img, video, picture, svg image, [style*="background-image"], [background]) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Emails the sender already designed dark are left exactly as they are. */
+:root[data-gg="on"] [data-gg-body="native"] {
+  color-scheme: dark;
+}
+
+/* Per-email controls ("View original", "Always for this sender"). Quiet until
+   you hover or tab into the message. */
+:root[data-gg="on"] [data-gg-ui] {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+:root[data-gg="on"] [data-message-id]:hover [data-gg-ui],
+:root[data-gg="on"] [data-gg-ui]:focus-within {
+  opacity: 1;
+}
+:root[data-gg="off"] [data-gg-ui] { display: none; }
+:root[data-gg="on"] [data-gg-ui] button {
+  font: 500 12px/1 system-ui, -apple-system, sans-serif;
+  color: var(--gg-text-2);
+  background: rgba(255, 255, 255, 0.07);
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  box-shadow: inset 0 0 0 1px var(--gg-edge);
+  cursor: pointer;
+}
+:root[data-gg="on"] [data-gg-ui] button:hover { background: rgba(255, 255, 255, 0.13); color: var(--gg-text); }
+:root[data-gg="on"] [data-gg-ui] button[aria-pressed="true"] {
+  color: var(--gg-text);
+  background: rgba(var(--gg-accent-rgb), 0.22);
+  box-shadow: inset 0 0 0 1px rgba(var(--gg-accent-rgb), 0.5);
+}
+:root[data-gg="on"] [data-gg-ui] button[hidden] { display: none; }
+
+/* ---------- keyboard focus ---------- */
+
+/* Gmail's own focus rings are tuned for light backgrounds; make sure one is
+   always visible. Text fields are skipped (they show a caret), and so are
+   tabindex="-1" elements: Gmail focuses those from code (e.g. the subject
+   when a thread opens), not because you pressed Tab. */
+:root[data-gg="on"] :focus-visible:not([contenteditable="true"], input, textarea, [tabindex="-1"], [role="search"] *) {
+  outline: 2px solid var(--gg-link) !important;
+  outline-offset: 1px !important;
+}
+:root[data-gg="on"] [role="row"]:focus-visible {
+  outline-offset: -2px !important;
+  border-radius: 6px;
+}
+
+/* ---------- Increase contrast (macOS / OS setting) ---------- */
+
+:root[data-gg="on"][data-gg-contrast] {
+  --gg-text: #ffffff;
+  --gg-text-2: #e3e3e3;
+  --gg-edge: rgba(255, 255, 255, 0.28);
+  --gg-edge-hi: rgba(255, 255, 255, 0.4);
+}
+:root[data-gg="on"][data-gg-contrast] [data-gg-panel]::after {
+  background: rgba(255, 255, 255, 0.3);
+}
+:root[data-gg="on"][data-gg-contrast] [role="search"] {
+  box-shadow: inset 0 0 0 1px var(--gg-edge) !important;
+}
+:root[data-gg="on"][data-gg-contrast] :is([role="navigation"], [role="banner"]) {
+  text-shadow: none;
+}
+:root[data-gg="on"][data-gg-contrast] ::placeholder {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+:root[data-gg="on"][data-gg-contrast] [data-gg-body="rich"] {
+  filter: none;
+}
+:root[data-gg="on"][data-gg-contrast] [data-gg-ui] { opacity: 1; }
+
+/* ---------- Reduce transparency (macOS / OS setting) ---------- */
+
+:root[data-gg="on"][data-gg-solid] {
+  --gg-sticky: rgb(20, 22, 28);
+  --gg-sticky-filter: none;
+}
+:root[data-gg="on"][data-gg-solid] [data-gg-panel]::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgb(20, 22, 28);
+}
+:root[data-gg="on"][data-gg-solid] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="search"], [gh="cm"]) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+:root[data-gg="on"][data-gg-solid] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  background-color: rgb(32, 34, 42) !important;
+}
+:root[data-gg="on"][data-gg-solid] [role="search"] { background: rgb(36, 38, 46) !important; }
+:root[data-gg="on"][data-gg-solid] [gh="cm"] { background-color: rgb(44, 46, 56) !important; }
+:root[data-gg="on"][data-gg-solid] {
+  --gg-shade: linear-gradient(rgb(14, 15, 20), rgb(14, 15, 20));
+}
+:root[data-gg="on"][data-gg-solid][data-gg-reading] [data-gg-wallpaper] {
+  filter: brightness(calc(var(--gg-wall-dim, 0.62) * 0.7)) !important;
+}
+:root[data-gg="on"][data-gg-solid][data-gg-reading] body::before {
+  filter: brightness(calc(var(--gg-wall-dim, 0.62) * 0.7));
+}
+
+/* ---------- mode crossfade ---------- */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: ease;
+}
+
+/* ---------- print ---------- */
+
+/* content.js turns the theme off around printing; this is the backstop. */
+@media print {
+  :root[data-gg="on"] [data-gg-panel]::before,
+  :root[data-gg="on"] [data-gg-panel]::after,
+  :root[data-gg="on"] body::before,
+  :root[data-gg="on"] body::after,
+  :root[data-gg="on"] [data-gg-wallroot]::after,
+  :root[data-gg="on"] [data-gg-ui] { display: none; }
+  :root[data-gg="on"] body { background: #fff !important; }
+}

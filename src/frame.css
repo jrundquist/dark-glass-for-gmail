@@ -1,0 +1,22 @@
+/*
+ * Embedded Google widgets shown inside Gmail (contact cards). content.js
+ * rewrites their colors and only marks the page when its parent is Gmail.
+ * The frame stays clear: Gmail's page puts frosted glass behind it (see
+ * glass.css), since a frame can't blur what's behind it. Matching
+ * color-scheme with Gmail keeps the frame's own canvas transparent.
+ */
+:root[data-gg="on"][data-gg-frame] {
+  color-scheme: dark;
+  --gg-text: #e8eaed;
+  accent-color: rgb(var(--gg-accent-rgb, 10, 132, 255));
+}
+:root[data-gg="on"][data-gg-frame],
+:root[data-gg="on"][data-gg-frame] body {
+  background: transparent !important;
+  color: var(--gg-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+:root[data-gg="on"][data-gg-frame] ::selection {
+  background: rgba(var(--gg-accent-rgb, 10, 132, 255), 0.35);
+}
