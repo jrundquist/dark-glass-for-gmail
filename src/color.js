@@ -91,6 +91,9 @@
   function border(c) {
     const [, , l] = toHsl(c);
     if (c[3] === 0) return null;
+    // Pure white borders only blend a box into a white surface (Chat's
+    // message rows): on dark glass they'd show as outlines.
+    if (l >= 0.985) return "transparent";
     if (l > 0.75) return white(0.12 * c[3]);
     if (l < 0.3 && c[3] < 0.3) return white(c[3]);
     return fg(c);
@@ -100,7 +103,7 @@
   function onAccent(c) {
     const [h, , l] = toHsl(c);
     if (l < 0.6) return null;
-    return hsla(h, 0.5, 0.14, c[3]);
+    return "var(--gg-on-accent)";
   }
 
   // Shadows: light-theme "shadows" that are really light separator lines
@@ -108,6 +111,7 @@
   function shadow(c) {
     const [, , l] = toHsl(c);
     if (c[3] === 0 || l < 0.6) return null;
+    if (l >= 0.985) return "transparent";
     return white(0.08 * c[3]);
   }
 
@@ -123,6 +127,9 @@
   function accentFor(c, kind) {
     const [h, s, l] = toHsl(c);
     if (h < 198 || h > 228 || s < 0.45 || l > 0.97 || c[3] === 0) return null;
+    // Very light blue-grays (#e9eef6, #f0f4f9) are Gmail's neutral surfaces,
+    // not its blue: only clearly saturated light blues are accents.
+    if (l >= 0.9 && s < 0.7) return null;
     const a = r2(c[3]);
     if (kind === "fg") {
       if (l < 0.05) return null;

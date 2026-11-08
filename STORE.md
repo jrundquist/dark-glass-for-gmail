@@ -3,7 +3,7 @@
 Copy these into the Developer Dashboard (https://chrome.google.com/webstore/devconsole).
 
 ## Package
-Upload `dist/dark-glass-for-gmail-1.0.0.zip`.
+Upload `dist/dark-glass-for-gmail-1.0.2.zip` (latest).
 
 ## Store listing
 - **Name:** Dark Glass for Gmail
@@ -34,7 +34,8 @@ Upload `dist/dark-glass-for-gmail-1.0.0.zip`.
   - `unlimitedStorage`: lets the user's optional custom wallpaper image be stored locally.
   - Host `mail.google.com`: the content script restyles Gmail.
   - Host `contacts.google.com/widget/*`: restyles the contact cards Gmail shows on hover.
-  - Hosts `*.googleusercontent.com`, `*.gstatic.com`, `*.google.com/rd-mail-pt/*`: read the brightness and color of images Gmail already displays (the theme wallpaper and email logos) so text contrast and logo visibility can be adjusted. Images are not stored or sent anywhere.
+  - Hosts `chat.google.com`, `calendar.google.com`, `keep.google.com`, `tasks.google.com`: restyles Chat and the Calendar, Keep and Tasks side panels that Gmail embeds. The script only acts when the page is shown inside Gmail; opened on their own, these sites are left untouched.
+  - Hosts `*.googleusercontent.com`, `*.gstatic.com`, `*.google.com/rd-mail-pt/*`: read the brightness and color of images Gmail already displays (the theme wallpaper and email logos) so text contrast and logo visibility can be adjusted, and read the stylesheets Google's embedded panels load from gstatic.com so they can be recolored. Nothing is stored or sent anywhere.
 - **Remote code:** No, I am not using remote code.
 - **Data usage:** check none of the data types (nothing is collected). Certify the three disclosures.
 - **Privacy policy URL:** https://jrundquist.github.io/dark-glass-for-gmail/PRIVACY.html

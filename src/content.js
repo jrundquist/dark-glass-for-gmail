@@ -23,9 +23,28 @@
   // Embedded Google widgets (contact cards) get only the color rewrite, and
   // only when they're shown inside Gmail: on other sites they stay as they are.
   const IS_FRAME = window !== window.top;
+
+  // The extension API, or null once it's gone. When the extension is
+  // reloaded or updated, scripts already running in open Gmail tabs lose
+  // their connection and any chrome.* call throws "Extension context
+  // invalidated". Those tabs keep their look; they just stop syncing until
+  // Gmail is reloaded.
+  function api() {
+    try {
+      return globalThis.chrome?.runtime?.id ? globalThis.chrome : null;
+    } catch {
+      return null;
+    }
+  }
+  const quiet = (p) => p?.catch?.(() => {});
+  // Contact cards and chat are only restyled inside Gmail, never in their own tab.
+  if (!IS_FRAME && location.hostname !== "mail.google.com") return;
   if (IS_FRAME) {
-    const parent = location.ancestorOrigins?.[0] || "";
-    if (parent !== "https://mail.google.com") return;
+    // Chat nests frames (Gmail > chat > conversation), so check the top page,
+    // and that every frame in between is Google's own.
+    const chain = [...(location.ancestorOrigins || [])];
+    if (chain.at(-1) !== "https://mail.google.com") return;
+    if (!chain.every((o) => /^https:\/\/[a-z0-9.-]+\.google\.com$/.test(o))) return;
     root.setAttribute("data-gg-frame", "");
   }
 
@@ -138,13 +157,23 @@
     const json = JSON.stringify(theme);
     if (json === sharedJson) return;
     sharedJson = json;
-    globalThis.chrome?.storage?.local?.set({ liveTheme: theme });
+    quiet(api()?.storage.local.set({ liveTheme: theme }));
+  }
+
+  // Text on solid accent fills (Send, Save): white when it reaches 4.5:1,
+  // otherwise near-black (light accents like orange or lime).
+  function onAccentFor(rgb) {
+    const c = [...rgb, 1];
+    const white = C.contrast(c, [255, 255, 255, 1]);
+    const dark = C.contrast(c, [20, 20, 22, 1]);
+    return white >= 4.5 || white >= dark ? "#fff" : "rgb(20, 20, 22)";
   }
 
   function applyFrameVars() {
     const s = root.style;
     const t = liveTheme || { accent: [10, 132, 255], link: [142, 195, 255], float: DEFAULT_FLOAT };
     s.setProperty("--gg-accent-rgb", t.accent.join(", "));
+    s.setProperty("--gg-on-accent", onAccentFor(t.accent));
     s.setProperty("--gg-link", `rgb(${t.link.join(", ")})`);
     s.setProperty("--gg-link-rgb", t.link.join(", "));
     s.setProperty("--gg-float-rgb", t.float.join(", "));
@@ -185,6 +214,7 @@
     const accent = pickAccent(src.info?.tint);
     s.setProperty("--gg-accent", `rgb(${accent.accent.join(", ")})`);
     s.setProperty("--gg-accent-rgb", accent.accent.join(", "));
+    s.setProperty("--gg-on-accent", onAccentFor(accent.accent));
     s.setProperty("--gg-link", `rgb(${accent.link.join(", ")})`);
     s.setProperty("--gg-link-rgb", accent.link.join(", "));
     shareTheme({ accent: accent.accent, link: accent.link, float });
@@ -299,9 +329,49 @@
     ["outline", "fg"],
   ];
 
+  // A popup in Gmail's CSS: a white surface that is positioned absolute or
+  // fixed and stacked above the page (high z-index or a drop shadow), like
+  // the emoji picker or the input tools menu. Many have no ARIA role. Turning
+  // their white see-through would show the page through them, so they get the
+  // solid dark float color instead.
+  const DARK_SHADOW = /rgba\(0, 0, 0, 0?\.[1-9]/;
+  function isPopupRule(st) {
+    if (!/^(absolute|fixed)$/.test(st.getPropertyValue("position"))) return false;
+    const z = parseInt(st.getPropertyValue("z-index"), 10);
+    return z >= 100 || DARK_SHADOW.test(st.getPropertyValue("box-shadow"));
+  }
+  // Material "elevation" shadows (Chat's message hover bar) mark a raised
+  // surface whatever its position.
+  function isRaisedRule(st) {
+    return /var\(--[\w-]*elevation/i.test(st.getPropertyValue("box-shadow"));
+  }
+  const POPUP_BG = "rgb(var(--gg-float-rgb))";
+  // A light surface we turned see-through: plain, or as a var() fallback.
+  const LIGHT_VEIL = /^(?:var\(--[\w-]+,\s*)?(?:transparent|rgba\(255, 255, 255, [\d.]+\))\)?$/;
+
+  // A token that just points at another token with a fallback color, like
+  // Chat's --message-background-color: var(--gm3-...-inverse-on-surface, #f2f2f2).
+  // The token it points at may be one we leave alone (inverse colors), so
+  // use the recolored fallback directly.
+  const ALIAS = /^\s*var\(\s*--[\w-]+\s*,\s*([^()]+|rgba?\([^()]*\))\s*\)\s*$/;
+
   function mapDecl(st, prop, value, kind) {
+    if (prop.startsWith("--")) {
+      const alias = ALIAS.exec(value);
+      if (alias) {
+        const fb = C.mapValue(alias[1].trim(), kind);
+        if (fb != null) return fb;
+      }
+    }
     const mapped = C.mapValue(value, kind);
     if (mapped == null) return null;
+    if (
+      kind === "bg" &&
+      !prop.startsWith("--") &&
+      prop !== "background-image" &&
+      LIGHT_VEIL.test(mapped) &&
+      (isPopupRule(st) || isRaisedRule(st))
+    ) return POPUP_BG;
     // Sticky/fixed bars (reply bar, toolbars) can't go fully see-through, or
     // content scrolling under them shows through: they become frosted glass.
     if (
@@ -333,6 +403,32 @@
   // Monochrome dark icon sprites (Gmail's light-theme icons) get inverted.
   const DARK_ICON = /[_\/](?:baseline_)?(?:nv[5-9]00|black|(?:gm_)?grey(?:[5-9]00)?|n[5-9]00)(?:[_.]|$)|ita_sprite/i;
   const ICON_URL = /url\([^)]*(?:\/icons\/|ita_sprite)[^)]*\)/i;
+
+  // Small inline SVG icons (Keep's checkboxes) drawn in black or dark gray:
+  // invisible on dark glass, so they get inverted like the sprites above.
+  // An SVG with no fill at all paints black.
+  const svgCache = new Map();
+  function isDarkSvgIcon(bi) {
+    const m = /url\(\s*["']?data:image\/svg\+xml(;base64)?,([^"')]+)/i.exec(bi);
+    if (!m) return false;
+    const key = m[2].slice(0, 400);
+    if (svgCache.has(key)) return svgCache.get(key);
+    let dark = false;
+    try {
+      const svg = m[1] ? atob(m[2]) : decodeURIComponent(m[2]);
+      const size = /<svg[^>]*\swidth="(\d+)/.exec(svg);
+      if (!size || +size[1] <= 48) {
+        const fills = [...svg.matchAll(/fill(?:="|:\s*)([^";]+)/g)].map((f) => f[1].trim()).filter((f) => f !== "none");
+        const colors = fills.map((f) => C.parse(f)).filter(Boolean);
+        dark = colors.length ? colors.every((c) => C.luminance(c) < 0.2) : fills.length === 0;
+      }
+    } catch {}
+    if (svgCache.size > 500) svgCache.clear();
+    svgCache.set(key, dark);
+    return dark;
+  }
+
+  const SOLID_ACCENT = /^background(?:-color)?:.*rgba\(var\(--gg-accent-rgb\), (?:1|0\.(?:8[5-9]|9\d?))\)/;
 
   function splitTopLevel(text) {
     const out = [];
@@ -376,6 +472,14 @@
         if (mapped != null) decls.push(`box-shadow:${mapped} !important`);
         continue;
       }
+      // Light gradients (the on-screen keyboard's keys) get the same treatment
+      // as flat backgrounds. Anything with an image URL is left alone.
+      if (prop === "background-image") {
+        if (!value.includes("gradient(") || value.includes("url(")) continue;
+        const mapped = C.mapValue(value, "bg");
+        if (mapped != null) push(prop, mapped);
+        continue;
+      }
       const kind = prop.startsWith("--") ? varKind(prop) : PROP_KIND[prop];
       if (!kind) continue;
       const mapped = mapDecl(st, prop, value, kind);
@@ -397,10 +501,21 @@
           ? "filter:invert(1) hue-rotate(180deg) brightness(1.05) !important"
           : `filter:${orig || "none"} !important`
       );
+    } else if (bi && isDarkSvgIcon(bi)) {
+      decls.push("filter:invert(1) hue-rotate(180deg) brightness(1.05) !important");
     }
     if (!decls.length) return "";
     ruleCount++;
-    return splitTopLevel(rule.selectorText).map(scopeSelector).join(",") + "{" + decls.join(";") + "}";
+    const sels = splitTopLevel(rule.selectorText).map(scopeSelector);
+    let css = sels.join(",") + "{" + decls.join(";") + "}";
+    // A solid accent fill: its label may be colored by another rule (Gmail
+    // sets button label colors in separate tokens), so set the text on the
+    // element and everything inside it here.
+    if (decls.some((d) => SOLID_ACCENT.test(d))) {
+      const own = sels.filter((x) => !x.includes("::"));
+      if (own.length) css += own.flatMap((x) => [x, x + " *"]).join(",") + "{color:var(--gg-on-accent) !important}";
+    }
+    return css;
   }
 
   function rewriteRules(rules) {
@@ -443,6 +558,28 @@
     return !!(n && n.closest && n.closest("[data-message-id]"));
   }
 
+  // Text of cross-origin sheets, fetched by the background worker, parsed
+  // into a sheet of our own and rewritten like any other.
+  const remoteSheets = new Map(); // href -> { css, rules } | "pending" | "failed"
+  function remoteSheet(href) {
+    const hit = remoteSheets.get(href);
+    if (hit && typeof hit === "object") return hit;
+    if (hit) return null;
+    const c = api();
+    if (!c || !/^https:\/\/([a-z0-9-]+\.)*gstatic\.com\//.test(href)) { remoteSheets.set(href, "failed"); return null; }
+    remoteSheets.set(href, "pending");
+    quiet(c.runtime.sendMessage({ type: "gg-css", url: href }).then((res) => {
+      if (!res?.text) { remoteSheets.set(href, "failed"); return; }
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(res.text);
+      ruleCount = 0;
+      const css = rewriteRules(sheet.cssRules);
+      remoteSheets.set(href, { css, rules: ruleCount });
+      scheduleSheets();
+    }, () => remoteSheets.set(href, "failed")));
+    return null;
+  }
+
   function rebuildSheets() {
     if (!active) return;
     const sheets = [...document.styleSheets, ...(document.adoptedStyleSheets || [])];
@@ -451,7 +588,12 @@
     for (const sheet of sheets) {
       if (isOurs(sheet) || isEmailSheet(sheet)) continue;
       let rules;
-      try { rules = sheet.cssRules; } catch { continue; } // cross-origin
+      try { rules = sheet.cssRules; } catch {
+        // Cross-origin sheet (Keep loads its CSS from gstatic.com).
+        const remote = sheet.href && remoteSheet(sheet.href);
+        if (remote) { css += remote.css; count += remote.rules; }
+        continue;
+      }
       let cached = sheetCache.get(sheet);
       if (!cached || cached.len !== rules.length) {
         ruleCount = 0;
@@ -505,7 +647,7 @@
   // does not also hold the navigation, then take its child that holds main.
   function findPanel() {
     const main = document.querySelector('[role="main"]');
-    if (!main) return null;
+    if (!main || !main.getClientRects().length) return findChatPanel();
     let node = main;
     while (
       node.parentElement &&
@@ -515,11 +657,32 @@
     return [...node.children].find((c) => c.contains(main)) || node;
   }
 
+  // In the Chat view there is no [role=main]: the panel is the outermost
+  // wrapper of the visible chat frame (several wrappers share its box).
+  function findChatPanel() {
+    const frame = [...document.querySelectorAll('iframe[src*="chat.google.com"]')]
+      .find((f) => f.getBoundingClientRect().height > 200);
+    if (!frame) return null;
+    const box = frame.getBoundingClientRect();
+    let node = frame;
+    while (node.parentElement && node.parentElement !== document.body) {
+      const r = node.parentElement.getBoundingClientRect();
+      if (Math.abs(r.width - box.width) > 1 || Math.abs(r.height - box.height) > 1) break;
+      node = node.parentElement;
+    }
+    return node === frame ? frame.parentElement : node;
+  }
+
   // Theme wallpaper: big elements with a url() background near the top of
   // the DOM, inside a fixed layer (tagged as the wallpaper root).
   let wallEls = [];
+  let lastWallScan = 0;
   function findWallpaper() {
     if (wallEls.length && wallEls.every((e) => e.isConnected)) return;
+    // No theme image: don't rescan on every change, every 2s is plenty.
+    const now = performance.now();
+    if (!wallEls.length && now - lastWallScan < 2000) return;
+    lastWallScan = now;
     for (const e of wallEls) e.removeAttribute("data-gg-wallpaper");
     wallEls = [];
     const vw = innerWidth, vh = innerHeight;
@@ -557,7 +720,8 @@
     // permissions) fetches and measures it.
     let info = null;
     try {
-      info = await chrome.runtime.sendMessage({ type: "gg-wall", url: new URL(url, location.href).href });
+      const c = api();
+      info = c ? await c.runtime.sendMessage({ type: "gg-wall", url: new URL(url, location.href).href }) : null;
     } catch (e) {
       info = { error: String(e) };
     }
@@ -582,6 +746,40 @@
   }
 
   // Unread rows: Gmail shows them by making the sender bold, so read that.
+  // Floating boxes Gmail hangs off <body> (search options, some pickers) whose
+  // styles are spread across several rules, so the stylesheet pass can't
+  // tell they are popups. Found here by what they look like on screen: a
+  // positioned box near the top of the page with a drop shadow and no solid
+  // background of its own.
+  const POP_SHADOW = /rgba\(0, 0, 0, 0?\.[1-9]/;
+  function tagPopups() {
+    const seen = new Set();
+    const visit = (el, depth) => {
+      for (const c of el.children) {
+        if (c.tagName === "SCRIPT" || c.tagName === "STYLE" || c.tagName === "IFRAME") continue;
+        const cs = getComputedStyle(c);
+        if (cs.display === "none") continue;
+        if (
+          (cs.position === "absolute" || cs.position === "fixed") &&
+          POP_SHADOW.test(cs.boxShadow) &&
+          !c.matches('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], [role="tabpanel"], [data-gg-panel], :has(> iframe)') &&
+          !c.querySelector('[role="main"], [role="navigation"], [data-gg-panel]')
+        ) {
+          const r = c.getBoundingClientRect();
+          const bg = C.parse(cs.backgroundColor);
+          if (r.width * r.height > 8000 && (!bg || bg[3] < 0.5 || c.hasAttribute("data-gg-pop"))) {
+            seen.add(c);
+            continue;
+          }
+        }
+        if (depth < 3) visit(c, depth + 1);
+      }
+    };
+    visit(document.body, 0);
+    for (const old of document.querySelectorAll("[data-gg-pop]")) if (!seen.has(old)) old.removeAttribute("data-gg-pop");
+    for (const el of seen) if (!el.hasAttribute("data-gg-pop")) el.setAttribute("data-gg-pop", "");
+  }
+
   // Important markers: switches whose label mentions "important" (or whose
   // icon does, in other languages); the checked ones get the accent color.
   const IMPORTANT = /important/i;
@@ -788,8 +986,9 @@
     if (img.width && img.height && img.width * img.height < 400) return; // spacers, pixels
     img.setAttribute("data-gg-plate", "");
     const src = img.currentSrc || img.src;
-    if (!src.startsWith("https:") || !globalThis.chrome?.runtime?.sendMessage) return;
-    chrome.runtime.sendMessage({ type: "gg-img", url: src.split("#")[0] }).then((info) => {
+    const c = api();
+    if (!src.startsWith("https:") || !c) return;
+    c.runtime.sendMessage({ type: "gg-img", url: src.split("#")[0] }).then((info) => {
       if (!info || info.error || !img.isConnected || !img.hasAttribute("data-gg-plate")) return;
       if (info.clear < 0.02) img.removeAttribute("data-gg-plate"); // opaque
       else if (info.lum < 0.4) img.setAttribute("data-gg-plate", "invert"); // dark logo
@@ -899,7 +1098,7 @@
       else senders[sender] = showingOriginal ? "original" : "dark";
       settings.senders = senders;
       messageChoice.delete(id);
-      globalThis.chrome?.storage?.sync?.set({ senders });
+      quiet(api()?.storage.sync.set({ senders }));
     }
     body.removeAttribute("data-gg-sig");
     processBody(msg, body);
@@ -913,6 +1112,7 @@
     findWallpaper();
     trackChrome();
     tagRows();
+    tagPopups();
     let reading = false;
     for (const msg of document.querySelectorAll("[data-message-id]")) {
       reading = true;
@@ -964,7 +1164,9 @@
   observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-checked"] });
 
   addEventListener("load", () => { scheduleSheets(); scheduleTag(); });
-  addEventListener("resize", () => { wallEls = []; scheduleTag(); });
+  // Keep the wallpaper on resize: forgetting it mid-resize briefly fell back
+  // to the default gradient (and its blue accent).
+  addEventListener("resize", () => scheduleTag());
   addEventListener("hashchange", () => scheduleTag(true));
 
   // ------------------------------------------------------ health check
@@ -973,6 +1175,8 @@
   // instead of leaving light text on white. The popup shows the result.
   function healthCheck() {
     if (!active) return;
+    tag(); // frames (Chat) may have finished loading since the last pass
+    const mainVisible = !!document.querySelector('[role="main"]')?.getClientRects().length;
     const health = {
       at: Date.now(),
       rules: totalRules,
@@ -985,12 +1189,13 @@
     if (health.main && health.rules < 300) {
       health.paused = true;
       paused = true;
-      console.warn(LOG, "Gmail's styles couldn't be converted; pausing dark mode", health);
+      console.warn(LOG, "Gmail's styles couldn't be converted; pausing dark mode", JSON.stringify(health));
       update();
-    } else if (!health.panel || health.bodies < health.messages) {
-      console.warn(LOG, "some parts of Gmail weren't recognized", health);
+    } else if ((mainVisible && !health.panel) || health.bodies < health.messages) {
+      // Informational: shown in the console, not as an extension error.
+      console.info(LOG, "some parts of Gmail weren't recognized", JSON.stringify(health));
     }
-    globalThis.chrome?.storage?.local?.set({ health });
+    quiet(api()?.storage.local.set({ health }));
   }
   if (!IS_FRAME) setTimeout(healthCheck, 12000);
 
@@ -1001,10 +1206,11 @@
   addEventListener("afterprint", () => { printing = false; update(); });
   update();
 
-  if (globalThis.chrome?.storage?.sync) {
+  const ext = api();
+  if (ext?.storage?.sync) {
     Promise.all([
-      chrome.storage.sync.get(DEFAULTS),
-      chrome.storage.local.get({ customWall: null, customWallInfo: null, liveTheme: null }),
+      ext.storage.sync.get(DEFAULTS),
+      ext.storage.local.get({ customWall: null, customWallInfo: null, liveTheme: null }),
     ]).then(([s, l]) => {
       settings = { ...DEFAULTS, ...s };
       custom = { url: l.customWall, info: l.customWallInfo };
@@ -1012,7 +1218,7 @@
       update();
       booted = true;
     });
-    chrome.storage.onChanged.addListener((changes, area) => {
+    ext.storage.onChanged.addListener((changes, area) => {
       if (area === "sync") {
         for (const [k, v] of Object.entries(changes)) settings[k] = v.newValue ?? DEFAULTS[k];
       } else if (area === "local") {

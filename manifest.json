@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dark Glass for Gmail",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Dark mode for Gmail that follows your system, keeps your theme's wallpaper, and stays readable. Frosted dark glass.",
   "permissions": [
     "storage",
@@ -39,7 +39,11 @@
     },
     {
       "matches": [
-        "https://contacts.google.com/widget/*"
+        "https://contacts.google.com/widget/*",
+        "https://chat.google.com/*",
+        "https://calendar.google.com/*",
+        "https://keep.google.com/*",
+        "https://tasks.google.com/*"
       ],
       "css": [
         "src/frame.css"

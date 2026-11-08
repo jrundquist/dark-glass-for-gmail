@@ -77,8 +77,30 @@ async function inspectImage(url) {
   return info;
 }
 
+// Stylesheets Google apps load from gstatic.com (Keep). Pages can't read the
+// rules of a sheet from another origin, so the content script asks for the
+// text here and rewrites its own copy.
+const cssCache = new Map();
+async function fetchCss(url) {
+  if (cssCache.has(url)) return cssCache.get(url);
+  const res = await fetch(url, { credentials: "omit" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const text = await res.text();
+  if (text.length > 4_000_000) throw new Error("too big");
+  if (cssCache.size > 30) cssCache.clear();
+  cssCache.set(url, text);
+  return text;
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return;
+  if (msg?.type === "gg-css") {
+    let u;
+    try { u = new URL(msg.url); } catch { sendResponse(null); return; }
+    if (u.protocol !== "https:" || !/(^|\.)gstatic\.com$/.test(u.hostname)) { sendResponse(null); return; }
+    fetchCss(u.href).then((text) => sendResponse({ text }), (e) => sendResponse({ error: String(e) }));
+    return true;
+  }
   if (msg?.type === "gg-img") {
     let u;
     try { u = new URL(msg.url); } catch { sendResponse(null); return; }

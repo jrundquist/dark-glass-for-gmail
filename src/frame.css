@@ -1,5 +1,5 @@
 /*
- * Embedded Google widgets shown inside Gmail (contact cards). content.js
+ * Embedded Google widgets shown inside Gmail (contact cards, chat). content.js
  * rewrites their colors and only marks the page when its parent is Gmail.
  * The frame stays clear: Gmail's page puts frosted glass behind it (see
  * glass.css), since a frame can't blur what's behind it. Matching
@@ -19,4 +19,14 @@
 }
 :root[data-gg="on"][data-gg-frame] ::selection {
   background: rgba(var(--gg-accent-rgb, 10, 132, 255), 0.35);
+}
+/* Calendar and others draw light scrollbars of their own. */
+:root[data-gg="on"][data-gg-frame] * {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent !important;
+}
+/* Chat outlines each group of messages in a light gray ring that looks
+   heavy on dark glass. It has no ARIA role, so this is a compiled class
+   name: if Chat renames it, the ring comes back (harmless). */
+:root[data-gg="on"][data-gg-frame] .McQwEc {
+  border-color: transparent !important;
 }

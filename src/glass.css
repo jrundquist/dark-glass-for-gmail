@@ -105,6 +105,10 @@
   border-radius: 16px !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
 }
+/* The Chat view's panel is a frame: clip it to the rounded corners. */
+:root[data-gg="on"] [data-gg-panel]:not(:has([role="main"])):has(iframe[src*="chat.google.com"]) {
+  overflow: hidden;
+}
 /* The glass lives on a pseudo element: backdrop-filter on the panel itself
    would break Gmail's position:fixed children. */
 :root[data-gg="on"] [data-gg-panel]::before {
@@ -146,16 +150,20 @@
 :root[data-gg="on"][data-gg-motion] [role="main"] [role="row"] {
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
+/* Read rows (most of the list) stay dark: just the glass. */
+:root[data-gg="on"] [role="main"] [role="row"]:not([data-gg-unread]) {
+  background-color: transparent !important;
+}
 :root[data-gg="on"] [role="main"] [role="row"]:hover {
   background-color: rgba(255, 255, 255, 0.06) !important;
 }
-/* Unread: brighter row and an accent bar. */
+/* Unread: lighter row and an accent bar. */
 :root[data-gg="on"] [role="main"] [role="row"][data-gg-unread] {
-  background-color: rgba(255, 255, 255, 0.045) !important;
+  background-color: rgba(255, 255, 255, 0.09) !important;
   box-shadow: inset 3px 0 0 var(--gg-accent) !important;
 }
 :root[data-gg="on"] [role="main"] [role="row"][data-gg-unread]:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.13) !important;
 }
 /* Selected (checked) rows: accent tint, like a macOS sidebar selection. */
 :root[data-gg="on"] [role="main"] [role="row"]:has([role="checkbox"][aria-checked="true"]) {
@@ -276,12 +284,37 @@
     :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
   ) {
   background-color: var(--gg-float) !important;
-  -webkit-backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
-  backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 0 0 1px var(--gg-edge),
     0 18px 50px rgba(0, 0, 0, 0.5) !important;
+  color: var(--gg-text);
+}
+/* Menus and lists are frosted. Dialogs are not: backdrop-filter (like a
+   transform) turns an element into the anchor for its position:fixed
+   children, and compose pins its Send toolbar that way, so blur on the
+   dialog hid the toolbar. Without blur, any see-through shows crisp text
+   behind, so dialogs are solid instead. */
+:root[data-gg="on"] :is([role="menu"], [role="listbox"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  -webkit-backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+  backdrop-filter: blur(calc(var(--gg-blur, 24px) + 8px)) saturate(170%);
+}
+:root[data-gg="on"] :is([role="dialog"], [role="alertdialog"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  background-color: rgb(var(--gg-float-rgb)) !important;
+}
+/* Menus opened from inside a dialog or another menu (compose's From picker,
+   submenus) float above it: a slightly lighter surface, edge and shadow. */
+:root[data-gg="on"] :is([role="dialog"], [role="alertdialog"], [role="menu"]) [role="menu"] {
+  background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06)), rgb(var(--gg-float-rgb)) !important;
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px var(--gg-edge),
+    0 14px 40px rgba(0, 0, 0, 0.55) !important;
   color: var(--gg-text);
 }
 
@@ -291,14 +324,23 @@
 }
 
 /* Popovers fade and settle in, like macOS. Uses the individual `translate`
-   and `scale` properties so Gmail's own transforms are untouched. */
+   and `scale` properties so Gmail's own transforms are untouched. Dialogs
+   only fade: moving them would re-anchor their fixed children mid-animation. */
 @keyframes gg-pop {
   from { opacity: 0; translate: 0 -4px; scale: 0.98; }
 }
-:root[data-gg="on"][data-gg-motion] :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"]):not(
+@keyframes gg-fade {
+  from { opacity: 0; }
+}
+:root[data-gg="on"][data-gg-motion] :is([role="menu"], [role="listbox"], [role="tooltip"]):not(
     :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
   ) {
   animation: gg-pop 0.16s var(--gg-ease);
+}
+:root[data-gg="on"][data-gg-motion] :is([role="dialog"], [role="alertdialog"]):not(
+    :is([role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]) *
+  ) {
+  animation: gg-fade 0.16s ease-out;
 }
 
 /* Contact cards: an embedded Google Contacts page. Its own colors are
@@ -318,6 +360,42 @@
 }
 :root[data-gg="on"][data-gg-motion] :has(> iframe[src*="contacts.google.com/widget/hovercard"]) {
   animation: gg-pop 0.16s var(--gg-ease);
+}
+
+/* Popups without an ARIA role, found by content.js (search options and the like). */
+:root[data-gg="on"] [data-gg-pop] {
+  background: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04)), rgb(var(--gg-float-rgb)) !important;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px var(--gg-edge),
+    0 18px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Side panel apps (Calendar, Keep, Tasks, Contacts) are embedded frames too, each in
+   a tab panel. Same idea: the frame is made clear, the panel gets the glass. */
+:root[data-gg="on"] [role="tabpanel"]:has(iframe[src*=".google.com/"]) {
+  background-color: var(--gg-glass) !important;
+  -webkit-backdrop-filter: blur(var(--gg-blur, 24px)) saturate(160%);
+  backdrop-filter: blur(var(--gg-blur, 24px)) saturate(160%);
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px var(--gg-edge), 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+}
+:root[data-gg="on"][data-gg-solid] [role="tabpanel"]:has(iframe[src*=".google.com/"]) {
+  background-color: rgb(var(--gg-glass-rgb)) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Compose's bottom bar is a table; its container and cells pick up faint
+   square backgrounds that read as blocks on the glass. Clear them, and round
+   the formatting toolbar. */
+:root[data-gg="on"] [role="dialog"] :is(:has(> [role="group"]), [role="group"] td) {
+  background-color: transparent !important;
+}
+:root[data-gg="on"] [role="dialog"] [role="toolbar"] {
+  border-radius: 12px !important;
 }
 
 /* Editors (compose, inline reply). */
@@ -395,18 +473,29 @@
 }
 
 /* Per-email controls ("View original", "Always for this sender"). Quiet until
-   you hover or tab into the message. */
+   you hover or tab into the message. The bar has no height, so the buttons
+   float up into the empty space right of "to me" instead of pushing the
+   body down. */
 :root[data-gg="on"] [data-gg-ui] {
+  position: relative;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
+  align-items: flex-end;
   gap: 6px;
-  margin: 0 0 6px;
+  height: 0;
+  margin: 0;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
 }
 :root[data-gg="on"] [data-message-id]:hover [data-gg-ui],
 :root[data-gg="on"] [data-gg-ui]:focus-within {
   opacity: 1;
+}
+:root[data-gg="on"] [data-message-id]:hover [data-gg-ui] button,
+:root[data-gg="on"] [data-gg-ui]:focus-within button {
+  pointer-events: auto;
 }
 :root[data-gg="off"] [data-gg-ui] { display: none; }
 :root[data-gg="on"] [data-gg-ui] button {
